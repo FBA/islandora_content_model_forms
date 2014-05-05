@@ -114,15 +114,6 @@ class EditObjectMetadataForm {
       '#type' => 'hidden',
       '#value' => isset($form_state['values']['dsid']) ? $form_state['values']['dsid'] : $dsid,
     );
-
-    $elements = element_children($form);
-    foreach ($elements as $element) {
-      if ($form[$element]['#type'] == 'file') {
-        $form[$element] = null;
-      }
-    }
-
-
     return $form;
   }
 
@@ -196,7 +187,24 @@ class EditObjectMetadataForm {
     $xml_form = new XMLForm($form_state);
     $doc = $xml_form->submit($form, $form_state);
     $document = $doc->document;
+
+   /**
+    *
+    * FBA MODIFICATION BY NBYWELL on 06/03/2014. Check the content of the
+    * 'rdf_relationships' variable which triggers
+    * the Object Linker functionality.
+    *
+    */
+
+    if (variable_get('rdf_relationships', NULL)) {
+      module_load_include('inc', 'islandora_content_model_forms', 'FOXML');
+      module_load_include('inc', 'islandora_content_model_forms', 'ObjectLinker');
+      process_link_data($document);
+    }
     $this->modifyDatastream($document, $pid, $dsid, "$dsid Record", 'text/xml');
+    if (variable_get('rdf_relationships', NULL)) {
+      process_links($form,$form_state,true);
+    }
     return $document;
   }
 
@@ -265,7 +273,7 @@ class EditObjectMetadataForm {
   private function isDatastreamManaged($pid, $dsid) {
     $fedora_item = new Fedora_Item($pid);
     $datastream = $fedora_item->get_datastream($dsid);
-    if ($datastream) {
+    if($datastream) {
       return $datastream->controlGroup == 'M';
     }
     else {

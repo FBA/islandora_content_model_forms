@@ -361,8 +361,24 @@ class IngestObjectMetadataForm {
 
       $transform = islandora_content_model_get_transform($content_model_pid, $form_name);
 
+      /**
+      *
+      * FBA MODIFICATION BY NBYWELL on 06/03/2014. Check content of
+      * the 'rdf_relationships' variable which triggers the
+      * Object Linker functionality.
+      *
+      */
+
+      if (variable_get('rdf_relationships', NULL)) {
+        module_load_include('inc', 'islandora_content_model_forms', 'ObjectLinker');
+        process_link_data($document);
+      }
       $foxml = new FOXML($label, $pid, $dsid, $content_model_pid, $collection_pid, $relationship, $ingest_file_location, $document, $transform, $state);
       $foxml->ingest();
+
+      if (variable_get('rdf_relationships', NULL)) {
+        process_links($form,$form_state, false);
+      }
       $_SESSION['fedora_ingest_files'] = '';
       $form_state['storage'] = NULL;
     }
