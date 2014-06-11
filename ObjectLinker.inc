@@ -5,6 +5,9 @@
  *
  * This file contains the bulk of the functions that handle Object Linking
  * in XML-Form functionality.
+ * It uses some of the ontology processing functionality developed by
+ * Giancoralo Birello of CNR-Ceris and Rosemary Le Faive of McGill University
+ * in the Islandora Relationship Editor module.
  */
 
 /**
@@ -628,10 +631,12 @@ function add_to_datastream($subjectPid, $subjectTitle, &$rdf_relationship, &$obj
             // current node.
             for ($x=0; $x<$attributesTot; $x++) {
               $attribute = explode('=', $attributes[$x]);
+              $attribute[0] = trim($attribute[0]);
               if (strlen($attribute[0]) > 0) {
                 $attributeTerm = substr($attribute[0],1);
                 $domAttribute = $objectDoc->createAttribute($attributeTerm);
                 if (strlen($attribute[1]) > 2) {
+                  $attribute[1] = trim($attribute[1]);
                   $attributeValue = substr($attribute[1],1, strlen($attribute[1])-2); // Strip off quotes.
                   $domAttribute->value = $attributeValue;
                   ${$nodePref.$objectXpathComponentCount}->appendChild($domAttribute);
