@@ -369,22 +369,59 @@ class IngestObjectMetadataForm {
       *
       */
 
-      if (variable_get('rdf_relationships', NULL)) {
-        module_load_include('inc', 'islandora_content_model_forms', 'ObjectLinker');
-        process_link_data($document);
-      }
-      $foxml = new FOXML($label, $pid, $dsid, $content_model_pid, $collection_pid, $relationship, $ingest_file_location, $document, $transform, $state);
-      $foxml->ingest();
+      module_load_include('inc', 'islandora_content_model_forms', 'ObjectLinker');
+      $duplicateEntryAlertRequired = false;
 
-      if (variable_get('rdf_relationships', NULL)) {
-        process_links($form,$form_state, false);
+      /**
+      *
+      * This is a check to determine if an entry already exists
+      * in the current collection for the a particular set of collections.
+      * As it is hard-coded it is debatable whether it should be included 
+      * in the publically released version of this code on GitHub.
+      */
+
+      switch ($collection_pid) {
+        // List of collections in which duplicates are not permitted.
+        case "fba:vocabpref_collection":
+        case "fba:vocabnonpref_collection":
+        case "fba:geopref_collection":
+        case "fba:geononpref_collection":
+          $sparqlQuery = 'SELECT ?title WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/' . $collection_pid . '> FILTER regex(str(?title), "' . $label . '", "i") } LIMIT 10';
+          $linkArray = get_link_array($sparqlQuery);
+          if (count($linkArray) > 0) {
+            foreach ($linkArray as $linkItem) {
+              $existingTitle = $linkItem['title'];
+            }
+            $duplicateEntryAlertRequired = true;
+          }
+          break;
+        default:
+          break;
       }
-      $_SESSION['fedora_ingest_files'] = '';
-      $form_state['storage'] = NULL;
+
+      if ($duplicateEntryAlertRequired) {
+        if (strcmp($label,$existingTitle)) {
+          $msg = 'The entry "' . $label . '" is already present within this collection as "' . $existingTitle . '", so it has not been created.';
+        } else {
+          $msg = 'The entry "' . $label . '" is already present within this collection, so it has not been created.';
+        }
+        drupal_set_message($msg);
+      } else {
+        if (variable_get('rdf_relationships', NULL)) {
+          process_link_data($document);
+        }
+        $foxml = new FOXML($label, $pid, $dsid, $content_model_pid, $collection_pid, $relationship, $ingest_file_location, $document, $transform, $state);
+        $foxml->ingest();
+
+        if (variable_get('rdf_relationships', NULL)) {
+          process_links($form,$form_state, false);
+        }
+        $_SESSION['fedora_ingest_files'] = '';
+        $form_state['storage'] = NULL;
+      }
     }
     $form_state['redirect'] = "fedora/repository/{$collection_pid}";
   }
-
 }
 
 function islandora_content_model_update_form_choice() {
