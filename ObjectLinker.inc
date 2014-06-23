@@ -145,7 +145,7 @@ function process_links(&$form, &$form_state, $editFlag) {
                   }
                 }
               } else {
-                $msg = 'While processing "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" the path corresponding to the "Subject Title XPath Search" field in the autocomplete record for the "' . $rdfName . '" link was not found.'; 
+                $msg = 'While processing "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" the path corresponding to the "Subject XPath Title Search" field in the autocomplete record for the "' . $rdfName . '" link was not found.'; 
                 drupal_set_message($msg);
               }
             } else {
@@ -385,7 +385,6 @@ function get_pre_and_post_edit_subject_titles_from_form(&$form, $subjectXpathTit
   $startFieldDelim = '"';
   $endFieldDelim = '";s'; // If it were just the double-quote, it would not process titles that contained quotes correctly.
   $serializedForm = serialize($form);
-
   $xpathMatched = strstr($serializedForm, $subjectXpathTitleSearch);
   if ($xpathMatched) {
     $preEditTitleFieldLabelMatched = strstr($xpathMatched, $preEditTitleFieldLabel);
