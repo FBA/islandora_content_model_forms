@@ -34,41 +34,43 @@ function process_link_data(DOMDocument &$document) {
   $charsInDelim = 2;
   $rdf_relationships = variable_get('rdf_relationships', NULL);
   $domxpath = new domXpath($document);
-
   foreach ($rdf_relationships as $rdf_relationship) {
-    register_xpath_namespaces($domxpath,$rdf_relationship['subject_namespace_info'], $checkPreviousNamespacePrefixes, $namespacePrefixesRegistered);
-    $queryResults = $domxpath->query($rdf_relationship['subject_xpath_data_search']);
-    $queryResultCount = 0;
-    if ($queryResults->length > 0) {
-      foreach ($queryResults as $queryResult) {
-        $objectPidFound = 0;
-        $objectItem = $queryResult->textContent;
-        if ($rdf_relationship['object_pid_append_required']) {
-          $objectPid = strstr($objectItem, $pidDelim);
-          if (strlen($objectPid) > $charsInDelim) {
-            $objectPid = substr($objectPid, $charsInDelim);
-            $delimPos = strpos($objectPid, $pidDelim);
-            if ($delimPos !== false) {
-              $objectPid = substr($objectPid, 0, $delimPos);
-              if (strlen($objectPid) > 0) {
-                $objectPidFound = 1;
-                $dataMinusPid = substr($objectItem,0,strlen($objectItem)-(strlen($objectPid) + (2*$charsInDelim) + 1));
-                $rdf_relationships[$rdfRelationshipCount]['rdf_link'][]['pid'] = $objectPid;
-                $rdf_relationships[$rdfRelationshipCount]['rdf_link'][$queryResultCount]['data'] = $dataMinusPid;
-                $queryResult->nodeValue = $dataMinusPid;
+    $subjectXpathDataSearch = $rdf_relationship['subject_xpath_data_search'];
+    if (strlen($subjectXpathDataSearch) > 0) {
+      register_xpath_namespaces($domxpath,$rdf_relationship['subject_namespace_info'], $checkPreviousNamespacePrefixes, $namespacePrefixesRegistered);
+      $queryResults = $domxpath->query($subjectXpathDataSearch);
+      $queryResultCount = 0;
+      if ($queryResults->length > 0) {
+        foreach ($queryResults as $queryResult) {
+          $objectPidFound = 0;
+          $objectItem = $queryResult->textContent;
+          if ($rdf_relationship['object_pid_append_required']) {
+            $objectPid = strstr($objectItem, $pidDelim);
+            if (strlen($objectPid) > $charsInDelim) {
+              $objectPid = substr($objectPid, $charsInDelim);
+              $delimPos = strpos($objectPid, $pidDelim);
+              if ($delimPos !== false) {
+                $objectPid = substr($objectPid, 0, $delimPos);
+                if (strlen($objectPid) > 0) {
+                  $objectPidFound = 1;
+                  $dataMinusPid = substr($objectItem,0,strlen($objectItem)-(strlen($objectPid) + (2*$charsInDelim) + 1));
+                  $rdf_relationships[$rdfRelationshipCount]['rdf_link'][]['pid'] = $objectPid;
+                  $rdf_relationships[$rdfRelationshipCount]['rdf_link'][$queryResultCount]['data'] = $dataMinusPid;
+                  $queryResult->nodeValue = $dataMinusPid;
+                }
               }
             }
           }
-        }
-        if (!$objectPidFound) {
-          $rdf_relationships[$rdfRelationshipCount]['rdf_link'][]['pid'] = 'nopid';
-          $rdf_relationships[$rdfRelationshipCount]['rdf_link'][$queryResultCount]['data'] = $objectItem;
+          if (!$objectPidFound) {
+            $rdf_relationships[$rdfRelationshipCount]['rdf_link'][]['pid'] = 'nopid';
+            $rdf_relationships[$rdfRelationshipCount]['rdf_link'][$queryResultCount]['data'] = $objectItem;
 
+          }
+          $queryResultCount+=1;
         }
-        $queryResultCount+=1;
       }
+      $rdfRelationshipCount+=1;
     }
-    $rdfRelationshipCount+=1;
   }
   variable_set('rdf_relationships', $rdf_relationships);
 } 
@@ -77,9 +79,9 @@ function process_link_data(DOMDocument &$document) {
  * Processes the configuration info in the 'rdf_relationships' variable,
  * which relates to one or more RDF-autocomplete entries associated
  * with the XML-Form.
- * RDF-links and inverse-links are created between subject and object.
- * The relevant datastreams in the objects are updated with symmetrical
- * entries.
+ * RDF-links and inverse-links are created between subject and object
+ * where appropriate. The relevant datastreams in the objects are updated
+ * with symmetrical entries, where appropriate.
  *
  * @param array $form
      The data relating to the XML-form that has been submitted.
@@ -146,21 +148,36 @@ function process_links(&$form, &$form_state, $editFlag) {
                 }
               } else {
                 $msg = 'While processing "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" the path corresponding to the "Subject XPath Title Search" field in the autocomplete record for the "' . $rdfName . '" link was not found.'; 
-                drupal_set_message($msg);
+                drupal_set_message(t($msg));
               }
             } else {
               $msg = 'While processing "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" the "Subject Title XPath Search" field in the autocomplete recordfor the "' . $rdfName . '" link was found to be empty.'; 
-              drupal_set_message($msg);
+              drupal_set_message(t($msg));
             }
           }
-          // Store all the existing RDF-info relating to this
-          // relationship in an array so that a comparison
-          // can be made later to determine which should be
-          // removed.
-          $spoSubject = '<info:fedora/' . $subjectPid . '>';
-          $spoPredicate = '<' . $rdf_relationship['rdf_predicate'] . '>';
-          $spoObject = '*';
-          $preEditObjectPidsForRelationship = spo_search($spoSubject, $spoPredicate, $spoObject);
+          // Check whether data can be expected to be present for this
+          // relationship in the subject XML before performing
+          // the spo_search query, because if only RDF links are
+          // potentially present, with no corresponding data, there is
+          // no point in determining which RDF links are present pre-edit, 
+          // because there should be no attempt to remove them in the 
+          // post-edit processing.
+          // This will normally be the case when the sparql-autocomplete
+          // entry corresponding to the relationship is only present in 
+          // order to cause the appropriate links to be removed if the
+          // subject is purged by the user.
+          if (strlen($rdf_relationship['subject_xpath_data_search']) > 0) {
+            // Store all the existing RDF-info relating to this
+            // relationship in an array so that a comparison
+            // can be made later to determine which should be
+            // removed.
+            $spoSubject = '<info:fedora/' . $subjectPid . '>';
+            $spoPredicate = '<' . $rdf_relationship['rdf_predicate'] . '>';
+            $spoObject = '*';
+            $preEditObjectTriplesForRelationship = spo_search($spoSubject, $spoPredicate, $spoObject);
+          } else {
+            $preEditObjectTriplesForRelationship = NULL;
+          }
         }
 
         if ($rdf_relationship['inverse_required'] == 1) {
@@ -172,7 +189,7 @@ function process_links(&$form, &$form_state, $editFlag) {
               $msgInsert = $subjectDCTitle;
             }
             $msg = 'While creating or editing "' . $msgInsert . '" with ID "' . $subjectPid . '" and attempting to create a "' . $rdfName . '" link, the inverse RDF link was not found.' ; 
-            drupal_set_message($msg);
+            drupal_set_message(t($msg));
             $rdf_relationship['inverse_required'] = 0;
           }
         }
@@ -192,7 +209,31 @@ function process_links(&$form, &$form_state, $editFlag) {
             // scenario, then create the object so that an RDF link
             // from the subject-object can be created to it.
             if (!strcmp($link['pid'], 'nopid') && strlen($link['data']) > 0) {
-              $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-model:hasModel> <info:fedora/%s>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER regex(?title, "^%s$", "i") }', $rdf_relationship['object_content_model_pid'], $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']));
+              // Having more than one content-model entered would be
+              // meaningless because if object-creation is enabled the new
+              // object can only be associated with one content model.
+              // Purge processing, which can operate across more than one
+              // content-model, uses an spo_search, so the content-models
+              // quoted here are irrelevant to that. The processing has
+              // been made to cope with the entry of multiple entries
+              // delimeted by "==" so that for autocompletes present
+              // only to deal with purge processing, they can be listed
+              // for reference.
+
+              $contentModelArray = explode('==', $rdf_relationship['object_content_model_pid']);
+              $contentModelArrayTot = count($contentModelArray);
+              $contentModelSparqlComponent = '';
+              $contentModelArrayCount = 0;
+              if ($contentModelArrayTot > 0) {
+                foreach ($contentModelArray as $contentModel) {
+                  $contentModelArrayCount += 1;
+                  $contentModelSparqlComponent .= 'regex(str(?model), "' . $contentModel . '", "i")';
+                  if ($contentModelArrayTot > 1 && $contentModelArrayCount < $contentModelArrayTot) {
+                    $contentModelSparqlComponent .= ' || ';
+                  }
+                }
+              }
+              $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-model:hasModel> ?model; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "^%s$", "i") && (%s))}', $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']), $contentModelSparqlComponent);
               $limit = -1; $offset = 0;
               $objectExistenceQueryResults = ObjectHelper::performRiQuery($sparqlTestObjectExistence, 'sparql', $limit, $offset);
               $objectExistenceCount = 0;
@@ -242,14 +283,13 @@ function process_links(&$form, &$form_state, $editFlag) {
                   // The editor has changed the title of the subject-object
                   // so this must be reflected in all the object-object
                   // datastreams that contain it.
-                  if ($preEditObjectPidsForRelationship) {
+                  if ($preEditObjectTriplesForRelationship) {
                     $preEditMatchFound = false;
-                    foreach ($preEditObjectPidsForRelationship as $preEditPid) {
-                      if (!strcmp($preEditPid, $objectExistencePid)) {
+                    foreach ($preEditObjectTriplesForRelationship as $preEditObjectTripleForRelationship) {
+                      if (!strcmp($preEditObjectTripleForRelationship['objectPid'], $objectExistencePid)) {
                         $preEditMatchFound = true;
                       }
                     }
-
                     if ($preEditMatchFound) {
                       remove_from_datastream($rdf_relationship, $objectExistencePid, $rdf_relationship['object_xpath_data_search'],$rdf_relationship['object_xpath_data_build_countback'], $preEditSubjectTitle);
 
@@ -271,7 +311,7 @@ function process_links(&$form, &$form_state, $editFlag) {
                 }
                 $msg = 'While processing "' . $msgInsert . '" with ID "' . $subjectPid . '" and attempting to create a "' . $rdfName . '" link to "' . $link['data'] . '" more than one record was found with the same title, so the link was not created.' ;
                 /*
-                drupal_set_message($msg);
+                drupal_set_message(t($msg));
                 */
               }
             }
@@ -288,8 +328,8 @@ function process_links(&$form, &$form_state, $editFlag) {
                 $spoSubject = '<info:fedora/' . $subjectPid . '>';
                 $spoPredicate = '<' . $rdf_relationship['rdf_predicate'] . '>';
                 $spoObject = '<info:fedora/' . $objectPid . '>';
-                $existingObjectPid = spo_search($spoSubject, $spoPredicate, $spoObject);
-                if (!$existingObjectPid) {
+                $existingObjectTriple = spo_search($spoSubject, $spoPredicate, $spoObject);
+                if (count($existingObjectTriple) == 0) {
                   // Add a subject-to-object RDF.
                   $subject->relationships->add($rdfNamespace, $rdfName, $objectPid);
                   if ($rdf_relationship['inverse_required'] == 1) {
@@ -313,8 +353,9 @@ function process_links(&$form, &$form_state, $editFlag) {
           }
         }
         if ($editFlag) {
-          if ($preEditObjectPidsForRelationship) {
-            foreach ($preEditObjectPidsForRelationship as $preEditPid) {
+          if ($preEditObjectTriplesForRelationship) {
+            foreach ($preEditObjectTriplesForRelationship as $preEditObjectTripleForRelationship) {
+              $preEditPid = $preEditObjectTripleForRelationship['objectPid'];
               $preEditMatchFound = false;
               if ($rdfRelationshipRdfLinkTot > 0) {
                 foreach ($rdf_relationship['rdf_link'] as $postEditLink) {
@@ -340,10 +381,10 @@ function process_links(&$form, &$form_state, $editFlag) {
                 } else {
                   if ($rdf_relationship['inverse_required'] == 1) {
                     $msg = 'While processing the linking for "' . $preEditSubjectTitle . '" with ID "' . $subjectPid . '" and attempting to remove both a "' . $rdfName . '" link to and a "' . $inverseName . '" link from "' . $preEditPid . '" the operation failed because the object "' . $preEditPid . '" was not found.' ;
-                    drupal_set_message($msg);
+                    drupal_set_message(t($msg));
                   } else {
                     $msg = 'While processing the linking for "' . $preEditSubjectTitle . '" with ID "' . $subjectPid . '" and attempting to remove a "' . $rdfName . '" link to "' . $preEditPid . '" the operation failed because the object "' . $preEditPid . '" was not found.' ;
-                    drupal_set_message($msg);
+                    drupal_set_message(t($msg));
                   }
                 }
               }
@@ -353,7 +394,7 @@ function process_links(&$form, &$form_state, $editFlag) {
       }
     } else {
       $msg = 'While processing the linking for a record with ID "' . $subjectPid . '" the subject-object failed to load.';
-      drupal_set_message($msg);
+      drupal_set_message(t($msg));
     }   
   }
 }
@@ -475,13 +516,19 @@ function spo_search($subject='*', $predicate='*', $object='*') {
     $content = str_replace("\n", '', $content);
     $triples = explode("> .", $content);
     $tripleCount = count($triples) - 1;
+    $subjectElement = 0;
+    $predicateElement = 1;
     $objectElement = 2;
+    $processedTriples = array();
     for ($i = 0; $i < $tripleCount; $i++) {
        $elements = explode("> ", $triples[$i]);
-       $namespacedPid = substr($elements[$objectElement],strlen('<info:fedora/'));
-       $pids[] = $namespacedPid;
+       $namespacedSubjectPid = substr($elements[$subjectElement],strlen('<info:fedora/'));
+       $requiredPredicateElementLen = strlen($elements[$predicateElement])-1;
+       $predicateOfTriple = substr($elements[$predicateElement],1, $requiredPredicateElementLen);
+       $namespacedObjectPid = substr($elements[$objectElement],strlen('<info:fedora/'));
+       $processedTriples[] = array("subjectPid" => $namespacedSubjectPid, "predicate" =>  $predicateOfTriple, "objectPid" => $namespacedObjectPid);
     }
-    return $pids;
+    return $processedTriples;
   } else {
     return NULL;
   }
@@ -676,7 +723,7 @@ function add_to_datastream($subjectPid, $subjectTitle, &$rdf_relationship, &$obj
       $objectDatastreamXml = $objectDoc->saveXML();
     } else {
       $msg = 'While creating or editing "' . $subjectTitle . '" with ID "' . $subjectPid . '" the attempt to add a node to a symmetric datastream in a linked object failed. Check the configuration of the autocomplete record' ;
-      drupal_set_message($msg);
+      drupal_set_message(t($msg));
 
     }
   }
@@ -715,9 +762,9 @@ function process_links_on_purge($subjectPid) {
       $spoSubject = '<info:fedora/' . $subjectPid . '>';
       $spoPredicate = '<' . $rdf_relationship['rdf_predicate'] . '>';
       $spoObject = '*';
-      $objectPidsForRelationship = spo_search($spoSubject, $spoPredicate, $spoObject);
-      $objectPidsForRelationshipTot = count($objectPidsForRelationship);
-      if ($objectPidsForRelationshipTot > 0) {
+      $objectTriplesForRelationship = spo_search($spoSubject, $spoPredicate, $spoObject);
+      $objectTriplesForRelationshipTot = count($objectTriplesForRelationship);
+      if ($objectTriplesForRelationshipTot > 0) {
         if ($rdf_relationship['inverse_required'] == 1) {
           $inverseName = fba_textfield_inverseof_value($rdf_relationship['rdf_predicate']);
         }
@@ -729,27 +776,60 @@ function process_links_on_purge($subjectPid) {
         $rdfNameLen = strlen($rdfName);
         $rdfNamespaceLen = $rdfPredicateLen - $rdfNameLen;
         $rdfNamespace = substr($rdf_relationship['rdf_predicate'], 0, $rdfNamespaceLen);
-        foreach ($objectPidsForRelationship as $objectPid) {
+        foreach ($objectTriplesForRelationship as $objectTripleForRelationship) {
+
+          $objectPid = $objectTripleForRelationship['objectPid'];
           if ($rdf_relationship['inverse_required'] == 1) {
             $object = islandora_object_load($objectPid);
             if ($object) {
               if (!strcmp($inverseName, 'No inverse')) {
                 $msg = 'While purging "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" and attempting to remove the inverse link for "' . $rdfName . '" on the object "' . $objectPid . '", the inverse linkname was not found in the ontology.' ; 
-                drupal_set_message($msg);
+                drupal_set_message(t($msg));
               } else {
                 $object->relationships->remove($rdfNamespace, $inverseName, $subject);
               }
 
-              // Check if inverse-object-symmetric link processing
+              // Check if inverse-object-symmetric datastream processing
               // is required.
               if ($rdf_relationship['symmetry_in_object_datastream_required'] && strlen($rdf_relationship['object_xpath_data_search']) > 0) {
                 remove_from_datastream($rdf_relationship, $objectPid, $rdf_relationship['object_xpath_data_search'], $rdf_relationship['object_xpath_data_build_countback'], $subjectDCTitle);
               }
            } else {
               $msg = 'While purging "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" and attempting to remove the inverse link "' . $inverseName . '" on the object "' . $objectPid . '", the object for this ID was not found.' ; 
-              drupal_set_message($msg);
+              drupal_set_message(t($msg));
            }
           }
+        }
+      }
+    }
+    // It is possible that the subject-object being purged has RDF links
+    // to it for which there are no corresponding outward links.
+    // Such links should also be removed. Note that what is referred
+    // to as a "subject" within the spo_search and triple, is different from
+    // the main "subject" of this purge, because the main "subject" is
+    // being used as the "object" within the spo_search.
+    $spoSubject = '*';
+    $spoPredicate = '*';
+    $spoObject = '<info:fedora/' . $subjectPid . '>';
+    $triples = spo_search($spoSubject, $spoPredicate, $spoObject);
+    $triplesTot = count($triples);
+    if ($triplesTot > 0) {
+      foreach ($triples as $triple) {
+        $rdfPredicateHashSubbed = str_replace('#', '/', $triple['predicate']);
+        $rdfPredicateArray = explode('/', $rdfPredicateHashSubbed);
+        $rdfPredicateArrayTot = count($rdfPredicateArray);
+        $rdfName = $rdfPredicateArray[$rdfPredicateArrayTot-1];
+        $rdfPredicateLen = strlen($triple['predicate']);
+        $rdfNameLen = strlen($rdfName);
+        $rdfNamespaceLen = $rdfPredicateLen - $rdfNameLen;
+        $rdfNamespace = substr($triple['predicate'], 0, $rdfNamespaceLen);
+        $pid = $triple['subjectPid'];
+        $object = islandora_object_load($pid);
+        if ($object) {
+          $object->relationships->remove($rdfNamespace, $rdfName, $subject);
+        } else {
+          $msg = 'While purging "' . $subjectDCTitle . '" with ID "' . $subjectPid . '" and attempting to remove the inverse link "' . $rdfName . '" on the object "' . $pid . '", the object for this ID was not found.' ; 
+          drupal_set_message(t($msg));
         }
       }
     }
@@ -898,7 +978,7 @@ function build_object_linker_form($formName) {
     }
   } catch (Exception $e) {
     $msg = "File: {$e->getFile()}<br/>Line: {$e->getLine()}<br/>Error: {$e->getMessage()}";
-    drupal_set_message(filter_xss($msg), 'error');
+    drupal_set_message(filter_xss(t($msg)), 'error');
   }
 }
 
@@ -954,13 +1034,13 @@ function register_xpath_namespaces(&$domxpath,&$namespaceInfo,$checkPrevious=fal
         $domxpath->registerNamespace($namespaceComponents[0], $namespaceComponents[1]);
       }
     } else {
-      drupal_set_message('The name space information has been incorrectly delimited for object linking.');
+      drupal_set_message(t('The name space information has been incorrectly delimited for object linking.'));
     }
     $namespaceCount += 1;
   }
 
   if ($namespaceCount == 0) {
-    drupal_set_message('The required name space information has not been entered for object linking.');
+    drupal_set_message(t('The required name space information has not been entered for object linking.'));
   }
 }
 
