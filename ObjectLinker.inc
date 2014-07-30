@@ -216,9 +216,9 @@ function process_links(&$form, &$form_state, $editFlag) {
               // content-model, uses an spo_search, so the content-models
               // quoted here are irrelevant to that. The processing has
               // been made to cope with the entry of multiple entries
-              // delimeted by "==" so that for autocompletes present
-              // only to deal with purge processing, they can be listed
-              // for reference.
+              // delimeted by "==" so that they can be listed for reference
+              // in autocompletes that exist only for the purpose of
+              // dealing with purge processing.
 
               $contentModelArray = explode('==', $rdf_relationship['object_content_model_pid']);
               $contentModelArrayTot = count($contentModelArray);
@@ -233,7 +233,7 @@ function process_links(&$form, &$form_state, $editFlag) {
                   }
                 }
               }
-              $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-model:hasModel> ?model; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "^%s$", "i") && (%s))}', $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']), $contentModelSparqlComponent);
+              $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-model:hasModel> ?model; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "%s", "i") && (%s))}', $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']), $contentModelSparqlComponent);
               $limit = -1; $offset = 0;
               $objectExistenceQueryResults = ObjectHelper::performRiQuery($sparqlTestObjectExistence, 'sparql', $limit, $offset);
               $objectExistenceCount = 0;
