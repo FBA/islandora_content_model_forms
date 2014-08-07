@@ -227,13 +227,13 @@ function process_links(&$form, &$form_state, $editFlag) {
               if ($contentModelArrayTot > 0) {
                 foreach ($contentModelArray as $contentModel) {
                   $contentModelArrayCount += 1;
-                  $contentModelSparqlComponent .= 'regex(str(?model), "' . $contentModel . '", "i")';
+                  $contentModelSparqlComponent .= 'regex(str(?model), "^info:fedora/' . $contentModel . '$", "i")';
                   if ($contentModelArrayTot > 1 && $contentModelArrayCount < $contentModelArrayTot) {
                     $contentModelSparqlComponent .= ' || ';
                   }
                 }
               }
-              $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-model:hasModel> ?model; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "%s", "i") && (%s))}', $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']), $contentModelSparqlComponent);
+              $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-model:hasModel> ?model; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "^%s$", "i") && (%s))}', $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']), $contentModelSparqlComponent);
               $limit = -1; $offset = 0;
               $objectExistenceQueryResults = ObjectHelper::performRiQuery($sparqlTestObjectExistence, 'sparql', $limit, $offset);
               $objectExistenceCount = 0;
