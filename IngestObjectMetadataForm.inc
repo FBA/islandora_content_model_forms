@@ -386,7 +386,7 @@ class IngestObjectMetadataForm {
         case "fba:vocabnonpref_collection":
         case "fba:geopref_collection":
         case "fba:geononpref_collection":
-          $sparqlQuery = 'SELECT ?title WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/' . $collection_pid . '> FILTER regex(str(?title), "' . $label . '", "i") } LIMIT 10';
+          $sparqlQuery = 'SELECT ?title WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/' . $collection_pid . '> FILTER regex(str(?title), "^' . $label . '$", "i") } LIMIT 10';
           $linkArray = get_link_array($sparqlQuery);
           if (count($linkArray) > 0) {
             foreach ($linkArray as $linkItem) {
