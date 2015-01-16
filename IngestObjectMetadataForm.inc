@@ -103,7 +103,8 @@ class IngestObjectMetadataForm {
       '#type' => 'fieldset',
       '#attributes' => array('class' => 'fedora_ingester'),
       '#id' => 'fedora_ingest_fieldset',
-      '#title' => t('Ingest digital object into %collection_label (@collection_pid), Step #1:', array('@collection_pid' => $collection_pid, '%collection_label' => $collection_label)),
+      //DTC-198 removed pid '#title' => t('Ingest digital object into %collection_label (@collection_pid), Step #1:', array('@collection_pid' => $collection_pid, '%collection_label' => $collection_label)),
+      '#title' => t('Ingest digital object, Step #1:'),
     );
 
     $form['indicator']['models'] = array(
