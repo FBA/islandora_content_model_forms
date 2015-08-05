@@ -322,9 +322,33 @@ class IngestObjectMetadataForm {
     if (!empty($relationship) && !empty($pid)) {
       module_load_include('inc', 'islandora_content_model_forms', 'FOXML');
       $label_field = islandora_content_model_get_title_field($content_model_pid, $form_name);
-      eval('$label = $form_state[\'values\']' . $label_field . ';'); //FIXME:  This doesn't really work in many cases (building the title from multiple fields, as for a person's last and first name fields.  Also:
+      //SFOX hacked code to get this working
+      $exploded_label_field = explode('[', $label_field);
+      foreach ($exploded_label_field as $elf_key => $elf_value) {
+        if ($elf_value) {
+          $label_field_text = trim($elf_value, ']');
+          $label_field_text = str_replace("'", "", $label_field_text);
+          if ($subarray) {
+            if (array_key_exists($label_field_text, $subarray)) {
+              $subarray = $subarray[$label_field_text];
+            }
+          }
+          else {
+            if (array_key_exists($label_field_text, $form_state['values'])) {
+              $subarray = $form_state['values'][$label_field_text];
+            }
+            else {
+              //not worth trying to drill down any further
+              break;
+            }
+          }
+        }
+      }
+      $label = $subarray;
+      //SFOX
+//      eval('$label = $form_state[\'values\']' . $label_field . ';'); //FIXME:  This doesn't really work in many cases (building the title from multiple fields, as for a person's last and first name fields.  Also:
       //FIXME:  'eval' is terrible... Get rid of it!
-      if(empty($label)) {
+      if (empty($label)) {
         $label = "Undefined";
       }
       if (empty($form['#post']['active-toggle'])) {
@@ -370,14 +394,14 @@ class IngestObjectMetadataForm {
       */
 
       module_load_include('inc', 'islandora_content_model_forms', 'ObjectLinker');
-      $duplicateEntryAlertRequired = false;
+      $duplicateEntryMsg = NULL;
+      $ocrProcessingRequired = false;
+      $ocrProcessingActivated = false; // This variable will no longer be required once the processing has been fully tested.
 
       /**
       *
       * This is a check to determine if an entry already exists
-      * in the current collection for the a particular set of collections.
-      * As it is hard-coded it is debatable whether it should be included 
-      * in the publically released version of this code on GitHub.
+      * in the current collection.
       */
 
       switch ($collection_pid) {
@@ -386,35 +410,57 @@ class IngestObjectMetadataForm {
         case "fba:vocabnonpref_collection":
         case "fba:geopref_collection":
         case "fba:geononpref_collection":
-          $sparqlQuery = 'SELECT ?title WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/' . $collection_pid . '> FILTER regex(str(?title), "^' . $label . '$", "i") } LIMIT 10';
-          $linkArray = get_link_array($sparqlQuery);
-          if (count($linkArray) > 0) {
-            foreach ($linkArray as $linkItem) {
-              $existingTitle = $linkItem['title'];
-            }
-            $duplicateEntryAlertRequired = true;
-          }
+          $sparqlQuery = 'SELECT ?title ?pid WHERE { ?pid <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:state> <fedora-model:Active>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/' . $collection_pid . '> FILTER regex(str(?title), "^' . $label . '$", "i") } LIMIT 10';
+          $duplicateEntryMsg = check_for_duplicate_label($label, $sparqlQuery);
           break;
         default:
-          break;
       }
 
-      if ($duplicateEntryAlertRequired) {
-        if (strcmp($label,$existingTitle)) {
-          $msg = 'The entry "' . $label . '" is already present within this collection as "' . $existingTitle . '", so it has not been created.';
-        } else {
-          $msg = 'The entry "' . $label . '" is already present within this collection, so it has not been created.';
-        }
-        drupal_set_message($msg);
+      if ($duplicateEntryMsg) {
+        drupal_set_message($duplicateEntryMsg);
       } else {
+        // The ocrProcessingActivated condition has been included below
+        // to disable this functionality until it has been fully tested.
+        if ((!strcmp($content_model_pid, 'fba:library_monograph_cmodel') ||
+            !strcmp($content_model_pid, 'fba:library_chapter_cmodel') ||
+            !strcmp($content_model_pid, 'fba:library_article_cmodel')) && $ocrProcessingActivated) {
+          /*
+          * Create a temporary directory in which to perform the
+          * OCR processing and copy the PDF file into it as the
+          * orginal is automatically removed as part of the
+          * ingestion process.
+          */
+          module_load_include('inc', 'islandora_content_model_forms', 'OcrProcessor');
+          $pdfFilePath=''; $escapedPdfFile = ''; $escapedPdfDirPath = ''; $tmpDir = '';
+          $tmpDirPath = ''; $concatOutputFilePath = ''; $ocrMsg = ''; $ocrProcessingRequired = true;
+          preprocess_pdf_file($ingest_file_location, $pdfFilePath, $escapedPdfFile, $escapedPdfDirPath, $tmpDir, $tmpDirPath, $ocrProcessingRequired, $ocrMsg);
+        }
+     
         if (variable_get('rdf_relationships', NULL)) {
-          process_link_data($document);
+          /*
+          * Pre-process Object Linking data.
+          */
+          preprocess_link_data($document);
         }
         $foxml = new FOXML($label, $pid, $dsid, $content_model_pid, $collection_pid, $relationship, $ingest_file_location, $document, $transform, $state);
         $foxml->ingest();
 
         if (variable_get('rdf_relationships', NULL)) {
+          /*
+          * Create Object-Object links.
+          */
           process_links($form,$form_state, false);
+        }
+
+        // The ocrProcessingActivated condition has been included below
+        // to disable this functionality until it has been fully tested.
+        if ($ocrProcessingRequired && $ocrProcessingActivated) {
+          /*
+          * Extract the text from the PDF in the temporary directory.
+          * directory, add it as an OCR datastream and then
+          * remove the temporary directory.
+          */
+          extractOcrFromPdf($pid, $pdfFilePath, $escapedPdfFile, $escapedPdfDirPath, $tmpDir, $tmpDirPath, $concatOutputFilePath, $ocrMsg);
         }
         $_SESSION['fedora_ingest_files'] = '';
         $form_state['storage'] = NULL;
