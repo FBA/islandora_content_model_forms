@@ -121,7 +121,7 @@ function process_links(&$form, &$form_state, $editFlag) {
       // involve a second call to islandora_object_load
       // which would be an unnecessary performance hit,
       // so a local version of the function is used instead.
-      $subjectDCTitle = get_datastream_content_via_xpath_local($subject, 'DC', 'http://purl.org/dc/elements/1.1/', '/oai_dc:dc/dc:title');
+      $subjectDCTitle = get_datastream_content_via_xpath_local($subject, 'DC', PURL_ELEMENTS_URI, '/oai_dc:dc/dc:title');
       $rdfRelationshipCount = 0;
 
       // For dataset processing, construct the user collection.
@@ -321,7 +321,7 @@ function process_instances_of_this_relationship(&$batch, &$rdf_relationship, &$e
         // constructed from the criteria specified in the relevant 
         // fields of the autocomplete record, e.g. the Object
         // Content Model and Collection Pids.
-        $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <http://purl.org/dc/elements/1.1/title> ?title; <fedora-model:hasModel> <info:fedora/%s>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "^%s$", "i"))}', $rdf_relationship['object_content_model_pid'], $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']));
+        $sparqlTestObjectExistence = sprintf('SELECT ?title ?object WHERE { ?object <%stitle> ?title; <fedora-model:hasModel> <info:fedora/%s>; <fedora-rels-ext:isMemberOfCollection> <info:fedora/%s> FILTER (regex(str(?title), "^%s$", "i"))}', PURL_ELEMENTS_URI, $rdf_relationship['object_content_model_pid'], $rdf_relationship['object_collection_pid'], escape_for_sparql($link['data']));
       }
       else {
         // As object creation is not required, the sparql query
@@ -872,7 +872,7 @@ function remove_links_on_purge(&$batch, $subjectPid) {
     //Get the dc.title value for the subject incase it is required
     //for removing inverse symmetric data in the object datastreams.
 
-    $subjectDCTitle = get_datastream_content_via_xpath_local($subject, 'DC', 'http://purl.org/dc/elements/1.1/', '/oai_dc:dc/dc:title');
+    $subjectDCTitle = get_datastream_content_via_xpath_local($subject, 'DC', PURL_ELEMENTS_URI, '/oai_dc:dc/dc:title');
     foreach ($rdf_relationships as $rdf_relationship) {
       // The outward rdf links do not need to be removed
       // because they will be deleted from the triple-store 
@@ -1331,7 +1331,7 @@ function get_rdf_object_entries($subjectPid, $predicate, $limit, $returnType, $h
         $filterComponent .= 'sameTerm(?subject, <info:fedora/' . $spoResult['objectPid'] . '>)' . '))';
       }
     }
-    $sparqlQuery = 'SELECT ?title ?pid WHERE { ?subject <http://purl.org/dc/elements/1.1/identifier> ?pid; <http://purl.org/dc/elements/1.1/title> ?title ' . $filterComponent . ' } ORDER BY ?title';
+    $sparqlQuery = 'SELECT ?title ?pid WHERE { ?subject <' . PURL_ELEMENTS_URI . 'identifier> ?pid; <' . PURL_ELEMENTS_URI . 'title> ?title ' . $filterComponent . ' } ORDER BY ?title';
 
     if ($limit > $noLimit) {
       $sparqlQuery = $sparqlQuery . ' LIMIT ' . $limit;
@@ -1379,7 +1379,7 @@ function get_rdf_subject_entries($objectPid, $predicate, $limit, $returnType, $h
   $noLimit = -1;
   $object = '<info:fedora/' . $objectPid . '>';
   $filterComponent = 'FILTER (sameTerm(?object,' . $object . '))';
-  $sparqlQuery = 'SELECT ?title ?pid WHERE { ?subject ' . $predicate . ' ?object;  <http://purl.org/dc/elements/1.1/title> ?title; <http://purl.org/dc/elements/1.1/identifier> ?pid ' . $filterComponent . ' } ORDER BY ?title';
+  $sparqlQuery = 'SELECT ?title ?pid WHERE { ?subject ' . $predicate . ' ?object;  <' . PURL_ELEMENTS_URI . 'title> ?title; <' . PURL_ELEMENTS_URI . 'identifier> ?pid ' . $filterComponent . ' } ORDER BY ?title';
   if ($limit > $noLimit) {
     $sparqlQuery = $sparqlQuery . ' LIMIT ' . $limit;
   }
